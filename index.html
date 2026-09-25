@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>
+      NEEDLEwork: Offline Rewriting of Robot Data with Verified Local Stitches
+    </title>
+    <meta
+      name="description"
+      content="Anonymous supplementary material: paired real-robot evaluations, stitching animations, and simulation experiments for NEEDLE."
+    />
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="style.css?v=0924e" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="site-nav">
+      <div class="wrap">
+        <a class="brand" href="#top">NEEDLE<span>work</span></a>
+        <nav aria-label="Sections">
+          <a href="#teaser">Overview</a><a href="#method">Method</a
+          ><a href="#real-robot">Real robot</a
+          ><a href="#simulation">Simulation</a><a href="#ablations">Ablations</a
+          ><a href="#details">Evaluation details</a>
+        </nav>
+      </div>
+    </div>
+    <main id="main">
+      <header class="paper-header wrap" id="top">
+        <p class="venue">ICLR 2027 · Anonymous supplementary material</p>
+        <h1>
+          <span class="title-name">NEEDLEwork:</span> Offline Rewriting of Robot
+          Data with Verified Local Stitches
+        </h1>
+        <p class="overview">
+          <b>TL;DR:</b> NEEDLE adds short, verified action bridges between
+          recorded observations, so a policy trained on imperfect demonstrations
+          skips detours, borrows better continuations, and recovers from failed
+          attempts.
+        </p>
+        <div class="links" role="group" aria-label="Project links">
+          <button class="button link-pill" type="button" disabled>Download Code</button>
+        </div>
+      </header>
+
+      <section id="teaser" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <h2>
+              How can we achieve better task execution from imperfect
+              demonstrations?
+            </h2>
+            <p class="lead">
+              Imperfect demonstrations contain useful behavior alongside
+              repeated grasps, detours, and unsuccessful attempts. A policy that
+              imitates the corpus as recorded inherits those inefficiencies. Yet
+              the best robot behavior may not exist in any single trajectory: one
+              demonstration may do the first half well and another the second.
+              We ask whether the useful pieces can be connected into better
+              training data from offline data alone, without a simulator, new
+              robot time, or privileged state.
+            </p>
+          </div>
+          <div id="clips-success" class="clip-rows"></div>
+          <p class="chart-caption">
+            Real-robot comparisons, shown at 2× speed. The
+            <a href="#real-robot">full evaluation below</a> includes success
+            rates and all 300 trials.
+          </p>
+        </div>
+      </section>
+
+      <section id="method" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <p class="eyebrow">01 / Intuition and method</p>
+            <h2>Why stitch demonstrations?</h2>
+            <p class="lead">
+              Consider folding a sweater: one demonstration folds the sleeves
+              reliably but needs several corrective grasps for the bottom fold;
+              another struggles with the sleeves but folds the bottom cleanly.
+              Connecting their useful segments could produce a better
+              demonstration than either alone.
+            </p>
+            <p class="lead">
+              This is the promise of <em>trajectory stitching</em>: connecting
+              useful segments to create better examples than those recorded. An
+              ideal stitch would offer a better continuation and supply actions
+              that physically reach it.
+            </p>
+          </div>
+
+          <div class="question">
+            <h3>What could stitching offer?</h3>
+            <p>
+              A <em>within-trajectory shortcut</em> (S1) bypasses an inefficient
+              detour inside one demonstration. A <em>cross-trajectory
+              transplant</em> (S2) combines complementary behaviors from two
+              successful demonstrations that were never recorded together. A
+              <em>failure funnel</em> (S3) connects a state on a failed attempt
+              to a successful continuation. The
+              animations illustrate these opportunities; realizing them requires
+              finding connections that are both useful and feasible.
+            </p>
+          </div>
+          <div class="tabs-row">
+            <div class="segmented" role="group" aria-label="Stitch type">
+              <button class="active" data-why="within" aria-pressed="true">
+                Within a trajectory</button
+              ><button data-why="across" aria-pressed="false">
+                Across trajectories</button
+              ><button data-why="failure" aria-pressed="false">
+                Failure to success
+              </button>
+            </div>
+          </div>
+          <figure class="anim">
+            <video
+              id="why-video"
+              class="sim-video"
+              controls
+              muted
+              loop
+              playsinline
+              preload="none"
+              poster="assets/media/why_within.jpg?v=17"
+              data-src="assets/media/why_within.mp4?v=17"
+              aria-label="What a short bridge changes: within a trajectory"
+            ></video>
+            <figcaption id="why-caption">
+              <b>Within a trajectory.</b> The demonstration reaches the target
+              state again after a detour from the source state. A bridge from
+              source to target skips the detour, and the recorded actions from
+              the target complete the task.
+            </figcaption>
+          </figure>
+
+          <div class="question">
+            <h3>Which connections would improve the data?</h3>
+            <p>
+              Connecting two nearby observations may simply add a detour. NEEDLE
+              therefore looks for targets with better recorded continuations.
+              From a successful demonstration, the connection and target
+              continuation must together take fewer steps than the original
+              route. From a failed attempt, the target must offer a successful
+              continuation where none was recorded. Among accepted bridges from
+              the same source, NEEDLE keeps the one with the shortest combined
+              bridge and remaining successful continuation. For successful
+              sources, this also maximizes the steps saved. These criteria
+              identify useful destinations; they do not establish that the robot
+              can reach them.
+            </p>
+          </div>
+
+          <div class="question">
+            <h3>
+              How should we best extract useful information from existing
+              demonstrations for stitching?
+            </h3>
+            <p class="insight">
+              <svg
+                class="bulb"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  class="glass"
+                  d="M9 16.5c0-1.4-.6-2.3-1.6-3.4A5.6 5.6 0 0 1 6 9.2 6 6 0 0 1 18 9.2c0 1.5-.5 2.8-1.4 3.9-1 1.1-1.6 2-1.6 3.4z"
+                />
+                <path
+                  d="M9.5 19h5M10.5 21.5h3M12 16.5v-4.5M10.2 10.5 12 12l1.8-1.5"
+                /></svg
+              ><b>Key insight.</b> Rather than learning a globally accurate
+              dynamics model or task-value function and asking it to reason over
+              long trajectories, NEEDLE reduces stitching in high-dimensional
+              observation spaces to a series of short, locally supervised
+              reachability problems. Short recorded
+              segments already teach both feasibility and duration: they show
+              which observations a sequence of actions connects, and in how many
+              steps, even in an episode that ultimately fails.
+            </p>
+          </div>
+
+          <div class="question">
+            <h3>How does NEEDLE stitch demonstrations together?</h3>
+            <p>
+              The recordings contain the useful segments, but may contain no
+              actions connecting them. A goal-conditioned inverse dynamics model
+              (IDM) proposes those missing actions from a source observation to
+              a target. Plausible actions can still miss the target, so an
+              action-conditioned verifier, trained on these short recorded
+              segments, assesses whether each prefix reaches it and after how
+              many steps. Its training pairs share one recorded action chunk:
+              the chunk is a positive example for the goal it reaches within the
+              horizon, and a negative example for a goal beyond the horizon or
+              on another trajectory. A negative label says only that this chunk
+              does not reach that goal, not that no action sequence could;
+              finding one that does is the objective of stitching.
+            </p>
+            <p>
+              <b>From proposal to bridge.</b> For each source–target pair, NEEDLE
+              selects the shortest prefix that passes the verifier’s threshold
+              as a <em>bridge</em>. This requires neither a simulator nor
+              reconstructed images along the bridge.
+            </p>
+          </div>
+          <figure class="anim">
+            <video
+              class="sim-video"
+              controls
+              muted
+              loop
+              playsinline
+              preload="none"
+              poster="assets/media/inference.jpg?v=20"
+              data-src="assets/media/inference.mp4?v=20"
+              aria-label="How a bridge is proposed and verified, animated on the paper’s pipeline figure"
+            ></video>
+            <figcaption>
+              Eight action sequences are replayed in simulation to illustrate
+              verification. The verifier scores whether each prefix reaches the
+              target; the dashed line marks its acceptance threshold. Three
+              proposals pass, and the shortest accepted prefix becomes the
+              bridge.
+            </figcaption>
+          </figure>
+
+          <div class="question">
+            <h3>How can the policy learn from a bridge?</h3>
+            <p id="fig3-motivation">
+              A bridge supplies new actions but no intermediate images. NEEDLE
+              pairs these actions with recorded observations at and before the
+              source, using recorded actions to lead into the bridge. Varying
+              the starting observation lets the policy learn the new
+              continuation from several preceding situations.
+            </p>
+            <p>
+              The bridge may end slightly away from its target, so the target’s
+              next actions may not apply there. Training therefore stops at the
+              bridge endpoint; the target continuation is learned separately
+              from its own observations. Because a stitch creates an alternative
+              local continuation rather than an exact synthetic trajectory, the
+              original actions at the bridge source and along the skipped
+              segment stay in the training set, at a controlled sampling weight,
+              so the policy keeps supervision for situations it may still
+              encounter.
+            </p>
+          </div>
+          <figure class="anim">
+            <video
+              class="sim-video"
+              controls
+              muted
+              loop
+              playsinline
+              preload="none"
+              poster="assets/media/windows.jpg?v=31"
+              data-src="assets/media/windows.mp4?v=31"
+              aria-label="How training windows are built around an accepted bridge, animated on the paper’s window figure"
+            ></video>
+            <figcaption id="windows-caption">
+              Each window pairs a recorded observation with the actions leading
+              into the bridge (cyan), then the bridge actions (green). Sliding
+              the start exposes the connection from several preceding
+              observations. Slots after the bridge carry no training loss. The
+              target continuation (blue) and original source and skipped-segment
+              actions remain separate training examples.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="real-robot" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <p class="eyebrow">02 / Real-robot evaluation</p>
+            <h2>Task success, completion time, and repeated motion</h2>
+            <p class="lead">
+              We compare NEEDLE with
+              <a href="https://www.roboticsproceedings.org/rss19/p026.html">diffusion policy (DP)</a>
+              and <a href="https://arxiv.org/abs/1910.00177">advantage-weighted regression (AWR)</a>
+              on dish racking and sweater
+              folding. Demonstrations are collected with handheld
+              <a href="https://arxiv.org/abs/2402.10329">UMI</a> devices.
+              Policies receive wrist-camera RGB and proprioception relative to
+              each trajectory’s starting pose; there is no shared coordinate
+              frame across demonstrations. We first report task success and all
+              evaluation rollouts, then examine completion time and repeated
+              motion.
+            </p>
+          </div>
+
+          <div class="question" id="q-success">
+            <h3>Does stitching improve task success?</h3>
+            <p>
+              NEEDLE succeeds in 44 of 50 dish trials and 48 of 50 sweater
+              trials. Each policy is evaluated on the same 50 starting states
+              per task.
+            </p>
+          </div>
+          <div class="agg">
+            <p class="agg-title">
+              Success Across All Trials
+              <span class="dir up">↑ Higher Is Better</span
+              ><span class="better">50 trials per policy and task</span>
+            </p>
+            <div class="chart-row two">
+              <div class="chart"><div id="rr-dish-success"></div></div>
+              <div class="chart"><div id="rr-sweater-success"></div></div>
+            </div>
+            <p class="chart-caption">
+              Compared with the strongest baseline on each task, success rises
+              by 18 percentage points on dish racking and 24 on sweater folding.
+            </p>
+          </div>
+
+          <div class="all-trials" id="all-trials">
+            <div class="all-trials-head">
+              <h3>All 300 evaluation trials</h3>
+              <p>
+                Select a task and policy. Each grid shows all 50 trials in trial
+                order at 2× speed; cells turn green for success or red for
+                failure and freeze at the end.
+              </p>
+              <div class="controls">
+                <div
+                  class="segmented"
+                  role="group"
+                  aria-label="Evaluation task"
+                >
+                  <button
+                    class="active"
+                    data-grid-task="dish"
+                    aria-pressed="true"
+                  >
+                    Dish racking</button
+                  ><button data-grid-task="sweater" aria-pressed="false">
+                    Sweater folding
+                  </button>
+                </div>
+                <div
+                  class="segmented"
+                  role="group"
+                  aria-label="Evaluation policy"
+                >
+                  <button data-grid-policy="DP" aria-pressed="false">DP</button
+                  ><button data-grid-policy="AWR" aria-pressed="false">
+                    AWR</button
+                  ><button
+                    class="active"
+                    data-grid-policy="Ours"
+                    aria-pressed="true"
+                  >
+                    NEEDLE
+                  </button>
+                </div>
+              </div>
+              <p class="grid-title small-note" aria-live="polite"></p>
+            </div>
+            <video
+              class="grid-video sim-video"
+              controls
+              muted
+              loop
+              playsinline
+              preload="none"
+              aria-label="All 50 trials of the selected policy and task"
+            ></video>
+          </div>
+
+          <div class="question" id="q-time">
+            <h3>Does stitching reduce completion time?</h3>
+            <p>
+              Mean completion time among successes can be misleading, since a
+              policy that solves fewer difficult starts can look faster. We
+              therefore also count, for each time limit, the fraction of all 50
+              trials completed within it, failures included. NEEDLE has the
+              lowest mean on sweater folding. On dish racking, AWR has a
+              slightly lower mean, while NEEDLE succeeds on more trials.
+            </p>
+          </div>
+          <div class="agg">
+            <p class="agg-title">
+              Time to Complete the Task
+              <span class="dir down">↓ Lower Is Better</span
+              ><span class="better"
+                >Successful trials only · mean ± standard error</span
+              >
+            </p>
+            <div class="chart-row two">
+              <div class="chart"><div id="rr-dish-time"></div></div>
+              <div class="chart"><div id="rr-sweater-time"></div></div>
+            </div>
+          </div>
+          <div class="agg">
+            <p class="agg-title">
+              Trials Completed Within a Time Limit
+              <span class="dir up">↑ Higher Is Better</span
+              ><span class="better"
+                >All 50 trials per policy and task · time from the first arm
+                motion to the operator’s success key</span
+              >
+            </p>
+            <div class="chart-row two">
+              <div class="chart"><div id="rr-dish-budget"></div></div>
+              <div class="chart"><div id="rr-sweater-budget"></div></div>
+            </div>
+            <div id="rr-budget-legend"></div>
+            <p class="chart-caption">
+              Each curve counts trials completed within the time limit; failed
+              trials do not count. NEEDLE reaches higher completion rates
+              earlier on both tasks.
+            </p>
+          </div>
+          <div id="clips-time" class="clip-rows"></div>
+
+          <div class="question" id="q-loops">
+            <h3>
+              Does the policy repeat less motion, and where do failures stop?
+            </h3>
+            <p>
+              The demonstrations contain hesitations, repeated grasps, and
+              re-attempts. These clips show baselines repeating a motion without
+              completing the task, while NEEDLE completes them. The figure
+              below marks, for every failed trial, the stage the policy never
+              completed.
+            </p>
+          </div>
+          <div id="clips-loops" class="clip-rows"></div>
+          <div class="agg">
+            <p class="agg-title">
+              Points of Failure <span class="dir up">↑ Higher Is Better</span
+              ><span class="better"
+                >Of 50 trials per policy, after each stage · a line steps down
+                where trials stopped and ends at the success count</span
+              >
+            </p>
+            <div id="rr-stages-legend"></div>
+            <div class="chart-row two stage-row">
+              <div class="chart">
+                <div id="rr-stages-dish"></div>
+                <svg class="fv-link" aria-hidden="true"></svg>
+                <div class="fail-viewer" id="fail-viewer-dish">
+                  <div class="fv-text">
+                    <p class="fv-hint">
+                      ▸ Click a filled point above to watch a trial that failed
+                      there.
+                    </p>
+                    <h4></h4>
+                    <p class="fv-count"></p>
+                  </div>
+                  <video
+                    class="sim-video"
+                    controls
+                    muted
+                    loop
+                    playsinline
+                    preload="none"
+                    aria-label="A failed dish trial of the selected kind"
+                  ></video>
+                </div>
+              </div>
+              <div class="chart">
+                <div id="rr-stages-sweater"></div>
+                <svg class="fv-link" aria-hidden="true"></svg>
+                <div class="fail-viewer" id="fail-viewer-sweater">
+                  <div class="fv-text">
+                    <p class="fv-hint">
+                      ▸ Click a filled point above to watch a trial that failed
+                      there.
+                    </p>
+                    <h4></h4>
+                    <p class="fv-count"></p>
+                  </div>
+                  <video
+                    class="sim-video"
+                    controls
+                    muted
+                    loop
+                    playsinline
+                    preload="none"
+                    aria-label="A failed sweater trial of the selected kind"
+                  ></video>
+                </div>
+              </div>
+            </div>
+            <p class="chart-caption" id="loop-caption">
+              The numbers beside a line give the number of trials that policy
+              lost at that stage, shown when the loss is 7 or more. All three policies lift
+              the plate in 47 of 50 dish trials; the difference comes at the
+              rack, where DP and AWR fail 13 and 11 times and NEEDLE 3. On
+              sweaters, AWR most often never gets past the first sleeve, which
+              it folds and lets fall open repeatedly, while DP more often stalls
+              at the second sleeve. Where points overlap, click again to switch
+              policy.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="simulation" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <p class="eyebrow">03 / Simulation experiments</p>
+            <h2>How do the bridges change what a policy learns?</h2>
+            <p class="lead">
+              We evaluate on three
+              <a href="https://proceedings.mlr.press/v164/mandlekar22a.html">Robomimic</a>
+              tasks with mixed-quality human
+              demonstrations: Can, Square, and two-arm Transport. Each task
+              provides 40 successful demonstrations and 150 failed attempts for
+              methods that use them. Results report the mean and standard error
+              across five training seeds, using each seed’s highest checkpoint
+              success rate on the same 50 fixed evaluation initial conditions.
+              All methods use the same checkpoint-evaluation frequency and
+              fixed evaluation starts.
+            </p>
+          </div>
+
+          <div class="question">
+            <h3>Does the success gain hold across simulated tasks?</h3>
+            <p>
+              NEEDLE has the highest success rate on all three tasks: on average
+              <span id="sim-gain-dp">8.4</span> percentage points above DP and
+              <span id="sim-gain-best">6.9</span> above the strongest baseline
+              on each task.
+            </p>
+          </div>
+          <p class="row-title">
+            (a) Success Rate (%) <span class="dir up">↑ Higher Is Better</span
+            ><span class="better">mean ± standard error over five seeds</span>
+          </p>
+          <div class="chart-row three" id="sim-success"></div>
+          <p class="row-title">
+            (b) Steps Taken on Successful Trials
+            <span class="dir down">↓ Lower Is Better</span>
+          </p>
+          <div class="chart-row three" id="sim-steps"></div>
+          <div id="sim-legend"></div>
+          <p class="chart-caption">
+            Baselines cover the three usual ways of getting more out of a fixed
+            dataset: adding connections with another stitching method
+            (<a href="https://link.springer.com/article/10.1007/s10994-023-06392-z">MBTS</a>),
+            selecting or reweighting its examples
+            (<a href="https://arxiv.org/abs/2503.22524">SBR</a>,
+            <a href="https://arxiv.org/abs/1910.00177">AWR</a>,
+            <a href="https://proceedings.iclr.cc/paper_files/paper/2026/hash/1c92edb990a05f2269f0cc3afbb4c952-Abstract-Conference.html">SARM</a>),
+            and choosing actions more carefully at run time
+            (<a href="https://arxiv.org/abs/2304.10573">IDQL</a>). NEEDLE’s successful
+            trials are also shorter than DP’s on Can and Square.
+          </p>
+
+          <div class="question" id="completion-analysis">
+            <h3>Do bridges lead to faster completion?</h3>
+            <p>
+              We test whether individual bridges reduce the remaining steps to
+              completion, and whether the trained policy succeeds within a given
+              step budget.
+            </p>
+          </div>
+          <figure class="paper-figure">
+            <div
+              class="figure-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Completion analysis, scroll horizontally on small screens"
+            >
+              <img
+                src="assets/figures/stitching_completion_analysis.svg?v=4"
+                width="998"
+                height="260"
+                loading="lazy"
+                alt="Can, Square, and Transport: accepted bridges shift remaining completion steps lower; NEEDLE’s policy reaches higher success within the evaluation budget than DP and IDQL."
+              />
+            </div>
+            <figcaption>
+              <b>Left of each task:</b> starting from the same recorded moment,
+              follow either the original recorded actions or the bridge for a
+              few steps, then let the same policy finish the task. This is an
+              advantage-style comparison under the same policy: both
+              continuations start from the same source, and we ask which leaves
+              the policy in a state from which success is easier to complete.
+              After a bridge, the task is finished in fewer remaining steps (the
+              blue distribution sits further left). <b>Right of each task:</b> give
+              every policy the same starting states and a time limit, and count
+              how many are solved as the limit grows. NEEDLE’s curve rises
+              earlier and ends higher than DP and IDQL, which means it solves
+              more starts, and solves them sooner.
+            </figcaption>
+          </figure>
+
+          <div class="question" id="recovery-analysis">
+            <h3>Can failed demonstrations teach recovery?</h3>
+            <p>
+              A failed trajectory can contain useful intermediate behavior even
+              though it never reaches the goal. A failure funnel connects such a
+              state to a successful continuation, turning a state that had no
+              successful action target into one with explicit supervision toward
+              success.
+            </p>
+          </div>
+          <figure class="paper-figure">
+            <div
+              class="figure-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Recovery analysis, scroll horizontally on small screens"
+            >
+              <img
+                src="assets/figures/stitching_recovery_analysis.svg?v=2"
+                width="981"
+                height="260"
+                loading="lazy"
+                alt="For each task, visual-feature plots show training starts added by failure-to-success bridges, alongside recovery curves for NEEDLE, DP, and AWR."
+              />
+            </div>
+            <figcaption>
+              <b>Left of each task:</b> a map of the situations the policy is
+              trained in. The gray region is what the successful demonstrations
+              cover; the colored region is what the bridges from failed
+              attempts add. <b>Right of each task:</b> drop each policy into a
+              situation taken from a failed attempt and see whether it recovers
+              and finishes. NEEDLE recovers more often than DP on all three
+              tasks (by 5.1, 3.3, and 3.9 percentage points on Can, Square, and
+              Transport) and more often than AWR, the non-DP baseline with the
+              highest average success across the three tasks on nominal resets.
+            </figcaption>
+          </figure>
+
+          <div class="question" id="verifier-analysis">
+            <h3>Does checking the bridges matter?</h3>
+            <p>
+              A useful connection must pass two separate tests. It must be
+              useful: following the target’s recorded actions should give the
+              policy a better route to completion. It must also be feasible: the
+              proposed bridge actions must actually reach the target. Candidate
+              selection estimates usefulness from recorded continuations; the
+              verifier judges feasibility from the proposed actions. We test
+              whether its scores depend on the actions, whether accepted bridges
+              reach their targets in simulation, and whether verification
+              improves policy success.
+            </p>
+          </div>
+          <div class="chart-row two">
+            <div class="chart">
+              <p class="task">Does the Verifier Respond to the Actions?</p>
+              <p class="sub">
+                how well it tells the true recorded actions apart from a
+                substitute, with the same source and target (1.0 = perfect, 0.5
+                = guessing)
+              </p>
+              <div class="table-scroll" id="ver-auroc"></div>
+            </div>
+            <div class="chart">
+              <p class="task">
+                Policy Success With and Without Verification (%)
+                <span class="dir up">↑ Higher Is Better</span>
+              </p>
+              <p class="sub">
+                same number of bridges per task, dashed line: DP
+              </p>
+              <div id="ver-ablation"></div>
+            </div>
+          </div>
+          <p class="row-title">
+            Do Accepted Bridges Arrive?
+            <span class="dir up">↑ Higher Is Better</span
+            ><span class="better"
+              >fraction of bridges that end within a given distance of the
+              target when replayed in the simulator</span
+            >
+          </p>
+          <div class="chart-row three" id="ver-cdf"></div>
+          <div id="cdf-legend"></div>
+          <p class="chart-caption">
+            The verifier separates the true actions from every kind of
+            substitute (AUROC 0.85 to 0.98), including actions taken from the
+            same episode a little later and those from the closest starting arm
+            pose. Accepted bridges are more likely than rejected ones to finish
+            within 5 cm of the target, by 21.9, 34.6, and 61.1 percentage points
+            on Can, Square, and Transport. A policy trained on unchecked
+            proposals, with the same number of bridges, loses success on every
+            task; on Transport it falls from 53.2% to 20.4%. The distance to
+            target is measured only in this simulator diagnostic; the method
+            itself never sees object positions.
+          </p>
+
+          <div class="question">
+            <h3>What if the demonstrations are already good?</h3>
+            <p>
+              On three <a href="https://arxiv.org/abs/2410.24185">DexMimicGen</a>
+              tasks, where the demonstrations are
+              near-optimal, NEEDLE matches DP on Threading and improves by 1.3
+              and 4.0 percentage points on Coffee and Three Piece Assembly. AWR
+              performs best on Threading.
+            </p>
+          </div>
+          <div class="table-scroll">
+            <table class="results-table">
+              <caption>
+                DexMimicGen Success (%) · Mean ± Standard Error Across Three Training Seeds
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Task</th>
+                  <th scope="col">DP</th>
+                  <th scope="col">SBR</th>
+                  <th scope="col">AWR</th>
+                  <th scope="col">IDQL</th>
+                  <th scope="col">SARM</th>
+                  <th scope="col" class="ours-col">NEEDLE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Coffee</th>
+                  <td>62.0 ± 1.2</td>
+                  <td>60.7 ± 2.4</td>
+                  <td>52.7 ± 1.8</td>
+                  <td>49.3 ± 1.8</td>
+                  <td>39.3 ± 1.8</td>
+                  <td class="ours-col"><b>63.3 ± 0.7</b></td>
+                </tr>
+                <tr>
+                  <th scope="row">Three Piece Assembly</th>
+                  <td>51.3 ± 0.7</td>
+                  <td>44.7 ± 1.8</td>
+                  <td>47.3 ± 1.3</td>
+                  <td>43.3 ± 3.5</td>
+                  <td>26.7 ± 1.8</td>
+                  <td class="ours-col"><b>55.3 ± 1.8</b></td>
+                </tr>
+                <tr>
+                  <th scope="row">Threading</th>
+                  <td>46.0 ± 1.2</td>
+                  <td>40.7 ± 2.4</td>
+                  <td><b>50.0 ± 1.2</b></td>
+                  <td>40.0 ± 1.2</td>
+                  <td>34.0 ± 2.0</td>
+                  <td class="ours-col">46.0 ± 1.2</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="chart-caption">
+            NEEDLE is most valuable when a dataset contains complementary,
+            inefficient, or unsuccessful behavior that can be recombined into
+            better supervision. When the demonstrations are already close to the
+            desired behavior, rewriting has correspondingly less to add, and it
+            does not reduce success relative to standard behavior cloning (DP).
+          </p>
+        </div>
+      </section>
+
+      <section id="ablations" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <p class="eyebrow">04 / Ablations</p>
+            <h2>Which design choices matter?</h2>
+            <p class="lead">
+              Three questions, mirroring Appendix B of the paper: which kinds of
+              connection help, how best to train on stitched data, and whether
+              the bridge actions themselves matter. Bars are success rates on
+              the three Robomimic tasks; DP and NEEDLE are the same numbers as above.
+            </p>
+          </div>
+
+          <div class="question" id="abl-stage">
+            <h3>Which kinds of connection help?</h3>
+            <p>
+              NEEDLE uses three kinds of bridge: skipping ahead within a
+              demonstration (S1), connecting two demonstrations (S2), and
+              connecting a failed attempt to a successful demonstration (S3).
+              Each row trains NEEDLE with a subset of them; the full method is
+              S1+S2+S3.
+            </p>
+          </div>
+          <div
+            class="ablation-chart"
+            id="abl-stage-charts"
+            tabindex="0"
+            role="region"
+            aria-label="Stitching-stage ablation chart"
+          ></div>
+          <p class="chart-caption">
+            No single kind of connection matches the full method on all three
+            tasks, and which kind helps most depends on the task:
+            cross-demonstration bridges contribute most on Can, while on
+            Transport adding failure bridges to S1+S2 gives the largest gain
+            (45.6% to 53.2%).
+          </p>
+
+          <div class="question" id="abl-sampling">
+            <h3>What is the best way to train on stitched data?</h3>
+            <p>
+              A bridge gives the policy a second way to act from a recorded
+              observation. Each row below changes one choice about how that is
+              turned into training examples. Under the chart, each change opens
+              into a short animation of what it does to the windows built from
+              one bridge.
+            </p>
+          </div>
+          <div
+            class="ablation-chart"
+            id="abl-sampling-charts"
+            tabindex="0"
+            role="region"
+            aria-label="Training-example construction ablation chart"
+          ></div>
+          <p class="section-note">
+            Open any of the four to see it applied to the same set of training
+            windows.
+          </p>
+          <details class="ablation design-change" id="design-twin_off">
+            <summary>Remove Original Source Actions</summary>
+            <p>
+              The source observation normally yields two training examples: one
+              that follows the bridge and one that keeps its own recorded actions.
+              This drops the recorded one, so that observation only ever teaches
+              the bridge.
+            </p>
+            <figure class="anim">
+              <video
+                class="sim-video"
+                controls
+                muted
+                loop
+                playsinline
+                preload="none"
+                poster="assets/media/design_twin_off.jpg?v=5"
+                data-src="assets/media/design_twin_off.mp4?v=5"
+                aria-label="Remove original source actions: what it changes about the training windows built from one bridge"
+              ></video>
+            </figure>
+          </details>
+          <details class="ablation design-change" id="design-twin_full">
+            <summary>Sample Original Source Actions More</summary>
+            <p>
+              Keeps both, but draws the recorded one as often as any ordinary
+              example instead of at the reduced weight the method uses by
+              default.
+            </p>
+            <figure class="anim">
+              <video
+                class="sim-video"
+                controls
+                muted
+                loop
+                playsinline
+                preload="none"
+                poster="assets/media/design_twin_full.jpg?v=5"
+                data-src="assets/media/design_twin_full.mp4?v=5"
+                aria-label="Sample original source actions more: what it changes about the training windows built from one bridge"
+              ></video>
+            </figure>
+          </details>
+          <details class="ablation design-change" id="design-no_bypass">
+            <summary>Remove Skipped Segments</summary>
+            <p>
+              Drops every training example whose window starts inside the
+              stretch the bridge skips over, so that part of the demonstration
+              is never trained on.
+            </p>
+            <figure class="anim">
+              <video
+                class="sim-video"
+                controls
+                muted
+                loop
+                playsinline
+                preload="none"
+                poster="assets/media/design_no_bypass.jpg?v=5"
+                data-src="assets/media/design_no_bypass.mp4?v=5"
+                aria-label="Remove skipped segments: what it changes about the training windows built from one bridge"
+              ></video>
+            </figure>
+          </details>
+          <details class="ablation design-change" id="design-concat_suffix">
+            <summary>Append Target’s Remaining Actions</summary>
+            <p>
+              Where a window runs past the end of the bridge, the default marks
+              the remaining slots as not scored. This fills them with the target
+              demonstration’s own next actions instead, which assumes the bridge
+              lands exactly on the target rather than near it.
+            </p>
+            <figure class="anim">
+              <video
+                class="sim-video"
+                controls
+                muted
+                loop
+                playsinline
+                preload="none"
+                poster="assets/media/design_concat_suffix.jpg?v=5"
+                data-src="assets/media/design_concat_suffix.mp4?v=5"
+                aria-label="Append target’s remaining actions: what it changes about the training windows built from one bridge"
+              ></video>
+            </figure>
+          </details>
+          <p class="chart-caption">
+            The default keeps the original actions next to the bridge (at half
+            the sampling weight), keeps the examples from the bypassed segment,
+            and stops the training target where the bridge ends. Removing the
+            original source actions costs 6 to 9 points on every task; removing
+            the bypassed segment costs 3 to 6. Appending the target
+            demonstration’s remaining actions directly after the bridge, as if
+            the connection were exact, lowers success on Square and Transport
+            (42.0% and 45.6% against 47.2% and 53.2%) and is the lowest variant
+            on Transport, consistent with the risk that a bridge’s endpoint
+            differs from the recorded target.
+          </p>
+
+          <div class="question" id="abl-bridge">
+            <h3>Do the bridge actions themselves matter?</h3>
+            <p>
+              This removes every training example whose window contains bridge
+              actions, while keeping the original demonstrations' examples at
+              the weights NEEDLE gives them. What remains is the recorded data,
+              reweighted by where the bridges were found.
+            </p>
+          </div>
+          <div
+            class="ablation-chart"
+            id="abl-bridge-charts"
+            tabindex="0"
+            role="region"
+            aria-label="Bridge-action ablation chart"
+          ></div>
+          <p class="chart-caption">
+            Removing the bridge actions lowers success from 83.6% to 77.2% on
+            Can, from 47.2% to 42.8% on Square, and from 53.2% to 45.6% on
+            Transport, so a large part of NEEDLE’s gain over DP comes from the
+            bridge actions rather than from reweighting the recorded data.
+          </p>
+        </div>
+      </section>
+
+      <section id="details" class="section">
+        <div class="wrap">
+          <div class="section-heading">
+            <p class="eyebrow">05 / Evaluation details</p>
+            <h2>Protocol and limitations</h2>
+          </div>
+          <div class="prose">
+            <h3>Limitations</h3>
+            <p>
+              NEEDLE assumes useful connections can be made with short action
+              sequences. It may fail when reaching a target requires long-horizon
+              contact dynamics, substantial object reconfiguration, or feedback
+              unavailable within an open-loop action chunk. Verification is
+              statistical: false positives can introduce harmful training
+              targets. The method requires episode-level success labels and is
+              designed for policies that predict action sequences. Real-robot
+              results cover two tasks and two baselines; simulation uncertainty
+              is reported over five training seeds on Robomimic and three on
+              DexMimicGen.
+            </p>
+            <h3 id="real-protocol">Real-robot evaluation</h3>
+            <p>
+              Each task is evaluated on 50 starting states. Objects are placed
+              using a reference-image overlay with the arms at their starting
+              pose. Outcomes are marked by hand. The mean completion times run
+              from the first arm motion to the marked completion in the
+              recorded video. Policies see wrist-camera images and relative pose
+              readings only.
+            </p>
+
+            <h3 id="sim-protocol">Simulation evaluation</h3>
+            <p>
+              Following prior evaluation practice
+              (<a href="https://www.roboticsproceedings.org/rss19/p026.html">Chi et al., 2023</a>),
+              we evaluate checkpoints every 25 epochs on the same 50 fixed
+              evaluation initial conditions and report the mean and standard
+              error of the maximum success rate observed across seeds. All
+              methods use the same checkpoint-evaluation frequency and the same
+              fixed evaluation starts.
+            </p>
+            <p>
+              Robomimic policies train for 300 epochs with five training seeds
+              and a fixed train/validation split; DexMimicGen results use three
+              training seeds. Steps per successful trial are measured at the
+              selected checkpoint. The completion and recovery figures use the
+              evaluation runs from the paper’s analysis, with time limits of
+              500 steps for Can and Square and 700 for Transport.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>Anonymous supplementary material · ICLR 2027</footer>
+    <script src="charts.js?v=4"></script>
+    <script src="app.js?v=11"></script>
+  </body>
+</html>
