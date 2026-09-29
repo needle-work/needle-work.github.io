@@ -317,3 +317,9 @@ html,body,button,input,select,textarea,video,svg,svg text,.fail-viewer{font-fami
 .link-pill{background:#fff;color:var(--blue-dk);border-color:var(--blue-lt);padding:9px 22px;font:16px/1.4 var(--serif);cursor:pointer}
 .link-pill:not(:disabled):hover{border-color:var(--blue-dk);background:#f3f6fa}
 .link-pill:disabled{cursor:default;opacity:1}
+
+/* GitHub code link in the paper header. */
+.paper-header .code-link{gap:10px;background:var(--ink);border-color:var(--ink);color:#fff;font-weight:700}
+.paper-header .code-link:hover{background:#1f2328;border-color:#1f2328;color:#fff}
+.paper-header .code-link:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.code-link svg{width:18px;height:18px;fill:currentColor;flex:none}
