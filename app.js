@@ -199,6 +199,15 @@ $$('[data-why]').forEach((button) => button.addEventListener('click', () => {
 }));
 
 
+// RoboDyna results from the rebuttal: mean and standard error over five seeds.
+const dynamicMethods = ['DP', 'AWR', 'Ours'];
+const dynamicResults = { success: [[88.4, 1.0], [85.2, 0.8], [94.0, 1.1]], steps: [[281.3, 7.9], [273.9, 4.7], [244.0, 10.6]] };
+Object.entries(dynamicResults).forEach(([metric, values]) => {
+  const bars = dynamicMethods.map((method, i) => ({ name: method, value: values[i][0], sem: values[i][1], color: RR_COL[method][0], edge: RR_COL[method][1] }));
+  Charts.groupedBars($('#dynamic-' + metric), [{ label: '', bars }], { width: 340, height: 260, ymax: metric === 'success' ? 100 : 300, ystep: metric === 'success' ? 25 : 100, ylabel: metric === 'success' ? 'Success rate (%)' : 'Steps per successful trial', fmt: (v) => v.toFixed(1), font: 1.05 });
+});
+Charts.legend($('#dynamic-legend'), dynamicMethods.map((method) => ({ label: NAME(method), color: RR_COL[method][0], edge: RR_COL[method][1] })));
+
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 fetch('assets/data/results.json?v=9').then((r) => { if (!r.ok) throw new Error(`Result data request failed: ${r.status}`); return r.json(); }).then((D) => {
   const rm = D.robomimic;
@@ -271,4 +280,34 @@ watchVideos();
 $$('details.ablation').forEach((d) => d.addEventListener('toggle', () => {
   if (!d.open) return;
   $$('video.sim-video', d).forEach((v) => { loadVideo(v); v.play().catch(() => {}); });
+}));
+
+// Keep the contents compact on narrow screens; it can be opened at any time.
+if (window.matchMedia("(max-width: 1199px)").matches) $(".question-nav details").open = false;
+
+// Highlight the current question and its parent section in the contents.
+const contentsLinks = $$('.question-nav nav a');
+const contentsTargets = contentsLinks.map((link) => ({ link, target: document.getElementById(link.hash.slice(1)) }));
+function updateContents() {
+  const threshold = Math.min(window.innerHeight * 0.3, 180);
+  let current = contentsTargets[0];
+  contentsTargets.forEach((item) => { if (item.target && item.target.getBoundingClientRect().top <= threshold) current = item; });
+  if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) current = contentsTargets[contentsTargets.length - 1];
+  $(".contents-current").textContent = current.link.textContent.trim();
+  let parent = current.link;
+  while (parent && parent.classList.contains('subnav')) parent = parent.previousElementSibling;
+  contentsLinks.forEach((link) => {
+    link.classList.toggle('current', link === current.link);
+    link.classList.toggle('current-group', link === parent && link !== current.link);
+    if (link === current.link) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current');
+  });
+}
+let contentsPending = false;
+window.addEventListener('scroll', () => { if (!contentsPending) { contentsPending = true; requestAnimationFrame(() => { updateContents(); contentsPending = false; }); } }, { passive: true });
+window.addEventListener('resize', updateContents);
+updateContents();
+
+// Close the compact menu after choosing a destination so the content is visible.
+contentsLinks.forEach((link) => link.addEventListener('click', () => {
+  if (window.matchMedia('(max-width: 1199px)').matches) $('.question-nav details').open = false;
 }));

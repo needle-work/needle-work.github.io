@@ -11,21 +11,24 @@
       content="Paired real-robot evaluations, stitching animations, and simulation experiments for NEEDLE."
     />
     <link rel="icon" href="assets/favicon.svg" />
-    <link rel="stylesheet" href="style.css?v=0929b" />
+    <link rel="stylesheet" href="style.css?v=final-5" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <div class="site-nav">
       <div class="wrap">
         <a class="brand" href="#top">NEEDLE<span>work</span></a>
-        <nav aria-label="Sections">
-          <a href="#teaser">Overview</a><a href="#method">Method</a
-          ><a href="#real-robot">Real robot</a
-          ><a href="#simulation">Simulation</a><a href="#ablations">Ablations</a
-          ><a href="#details">Evaluation details</a>
-        </nav>
       </div>
     </div>
+    <aside class="question-nav review-nav" aria-label="Page contents"><details open><summary><span>Contents</span><span class="contents-current" aria-hidden="true"></span></summary><nav>
+      <a href="#teaser">Overview</a><a href="#method">Method</a><a class="subnav" href="#key-insight-1"><span aria-hidden="true">💡</span> Key Insight 1</a>
+      <a href="#real-robot">Real-robot results</a><a class="subnav" href="#q-success">Success and trials</a>
+      <a href="#real-analysis">Real-robot analysis</a><a class="subnav" href="#q-time">Time and repeated motion</a>
+      <a href="#simulation">Simulation results</a><a class="subnav" href="#dynamic-task">Dynamic task</a>
+      <a href="#simulation-analysis">Simulation analysis</a><a class="subnav" href="#data-quality">Data quality and quantity</a><a class="subnav" href="#key-insight-2"><span aria-hidden="true">💡</span> Key Insight 2</a><a class="subnav" href="#near-optimal">Near-optimal data</a><a class="subnav" href="#bridge-errors">Bridge errors</a><a class="subnav" href="#key-insight-3"><span aria-hidden="true">💡</span> Key Insight 3</a><a class="subnav" href="#completion-analysis">Completion time and recovery</a><a class="subnav" href="#key-insight-4"><span aria-hidden="true">💡</span> Key Insight 4</a>
+      <a href="#stitching-breakdown">Stitching breakdown</a><a class="subnav" href="#verifier-analysis">Verification</a><a class="subnav" href="#bridge-composition">Composition</a>
+      <a href="#ablations">Ablations</a><a href="#details">Evaluation details</a>
+    </nav></details></aside>
     <main id="main">
       <header class="paper-header wrap" id="top">
         <h1>
@@ -162,7 +165,7 @@
               How should we best extract useful information from existing
               demonstrations for stitching?
             </h3>
-            <p class="insight">
+            <p class="insight" id="key-insight-1">
               <svg
                 class="bulb"
                 viewBox="0 0 24 24"
@@ -176,7 +179,7 @@
                 <path
                   d="M9.5 19h5M10.5 21.5h3M12 16.5v-4.5M10.2 10.5 12 12l1.8-1.5"
                 /></svg
-              ><b>Key insight.</b> Rather than learning a globally accurate
+              ><b>Key Insight 1.</b> Rather than learning a globally accurate
               dynamics model or task-value function and asking it to reason over
               long trajectories, NEEDLE reduces stitching in high-dimensional
               observation spaces to a series of short, locally supervised
@@ -185,6 +188,28 @@
               which observations a sequence of actions connects, and in how many
               steps, even in an episode that ultimately fails.
             </p>
+          </div>
+
+          <div class="review-change retrieval-demo" id="retrieval-animation">
+            <div class="question"><h3>How are target states retrieved?</h3><p>We distribute a limited candidate budget across source states and visual distances. Select a line of the algorithm to explore the steps.</p></div>
+    <div class="s7anim">
+      <div class="s7stage"><div id="s7svg" role="img" aria-label="Animation of target retrieval for one Square source state"></div>
+        <div class="s7ctl"><button type="button" id="s7play" aria-label="Pause">❚❚</button><div id="s7dots"></div></div></div>
+      <div class="s7panel">
+        <ol class="s7code" id="s7code">
+          <li data-n=""><b>Input:</b> recorded observations, horizon <i>H</i>, candidate budgets</li>
+          <li data-n="1.">Calibrate distance cutoff <i>r</i> from recorded <i>H</i>-step transitions.</li>
+          <li data-n="2.">For each source <i>s</i>:</li>
+          <li class="i1" data-n="">collect eligible targets across trajectories;</li>
+          <li class="i1" data-n="">retain targets within cosine distance <i>r</i> of <i>s</i>;</li>
+          <li class="i1" data-n="">sample up to <i>k</i> targets round-robin across distance bins;</li>
+          <li class="i1" data-n="">propose bridges with the IDM, and keep those the verifier accepts.</li>
+          <li data-n=""><b>Output:</b> verified bridges for policy training.</li>
+        </ol>
+        <p class="s7note"><i>φ</i>: frozen visual features the policy is trained on. Cosine distance <i>d</i>(<i>a</i>, <i>b</i>) = 1 − cos(<i>φ</i>(<i>a</i>), <i>φ</i>(<i>b</i>)).</p>
+      </div>
+    </div>
+            <p class="chart-caption">Retrieval for one Square source state. Trajectories are shown in a two-dimensional projection of the frozen visual features; ring distance represents cosine distance from the source.</p>
           </div>
 
           <div class="question">
@@ -299,7 +324,7 @@
           <div class="question" id="q-success">
             <h3>Does stitching improve task success?</h3>
             <p>
-              NEEDLE succeeds in 44 of 50 dish trials and 48 of 50 sweater
+              <strong class="review-text">Rewriting improves real-robot success.</strong> NEEDLE succeeds in 44 of 50 dish trials and 48 of 50 sweater
               trials. Each policy is evaluated on the same 50 starting states
               per task.
             </p>
@@ -374,10 +399,11 @@
             ></video>
           </div>
 
+          <div class="group-divider review-change" id="real-analysis"><h3>Real-robot analysis</h3><p>How does stitching change task execution?</p></div>
           <div class="question" id="q-time">
             <h3>Does stitching reduce completion time?</h3>
             <p>
-              Mean completion time among successes can be misleading, since a
+              <strong class="review-text">Rewriting yields more success within a fixed time budget.</strong> Mean completion time among successes can be misleading, since a
               policy that solves fewer difficult starts can look faster. We
               therefore also count, for each time limit, the fraction of all 50
               trials completed within it, failures included. NEEDLE has the
@@ -526,7 +552,7 @@
           <div class="question">
             <h3>Does the success gain hold across simulated tasks?</h3>
             <p>
-              NEEDLE has the highest success rate on all three tasks: on average
+              <strong class="review-text">The same advantage appears with suboptimal simulated demonstrations.</strong> NEEDLE has the highest success rate on all three tasks: on average
               <span id="sim-gain-dp">8.4</span> percentage points above DP and
               <span id="sim-gain-best">6.9</span> above the strongest baseline
               on each task.
@@ -556,6 +582,116 @@
             trials are also shorter than DP’s on Can and Square.
           </p>
 
+          <div class="review-change" id="dynamic-task">
+            <div class="question">
+              <h3>Does the success gain extend to a dynamic task?</h3>
+              <p><strong>NEEDLEwork improves success even on non-quasistatic tasks.</strong>
+                We test our method on a third-party environment,
+                <a href="https://github.com/robodyna/robodyna">RoboDyna</a>,
+                where a robot places a cup onto a moving belt.</p>
+            </div>
+            <div class="chart-row two dynamic-charts">
+              <div><p class="row-title">Success rate <span class="dir up">↑ Higher Is Better</span></p><div class="chart" id="dynamic-success"></div></div>
+              <div><p class="row-title">Mean steps per successful trial <span class="dir down">↓ Lower Is Better</span></p><div class="chart" id="dynamic-steps"></div></div>
+            </div>
+            <div id="dynamic-legend"></div>
+            <p class="chart-caption">NEEDLEwork succeeds more often and uses fewer actions among successful trials. Bars show the mean and standard error over five training seeds.</p>
+            <div class="dynamic-videos">
+              <figure><video controls muted playsinline preload="metadata" poster="rebuttal/media/conveyor_faster_site_poster.jpg" src="rebuttal/media/conveyor_faster_site.mp4" aria-label="Matched conveyor rollouts: NEEDLEwork places the cup sooner than DP"></video><figcaption>Example: NEEDLEwork finishes sooner than DP.</figcaption></figure>
+              <figure><video controls muted playsinline preload="metadata" poster="rebuttal/media/conveyor_success_fail_site_poster.jpg" src="rebuttal/media/conveyor_success_fail_site_v2.mp4" aria-label="Matched conveyor rollouts: NEEDLEwork places the cup; DP does not"></video><figcaption>Example: NEEDLEwork succeeds; DP does not.</figcaption></figure>
+            </div>
+          </div>
+
+          <div class="group-divider review-change" id="simulation-analysis"><h3>Simulation analysis</h3><p>Where do the gains come from?</p></div>
+          <div class="review-change" id="data-quality">
+            <div class="question"><h3>How do data quality and quantity affect stitching?</h3>
+              <p class="insight" id="key-insight-2"><strong><span aria-hidden="true">💡</span> Key Insight 2.</strong> Stitching helps most when efficient demonstrations provide shortcuts for inefficient ones.</p><p>On Robomimic Square, the gain over DP grows as more suboptimal data enters a mixed-quality dataset. At 100% suboptimal data, the gain is no larger; holding the mixture fixed, it persists across dataset sizes.</p></div>
+            <div class="review-pair quality-pair"><figure><p class="row-title">Data quality and demonstration lengths</p><div class="plot" tabindex="0" role="region" aria-label="Data quality and demonstration lengths, scroll horizontally if needed"><div id="fig-mix"></div></div><figcaption>Recorded lengths (grey) and shortest routes after stitching (blue), alongside policy success.</figcaption></figure><figure><p class="row-title">Number of demonstrations</p><div class="plot" tabindex="0" role="region" aria-label="Success by number of demonstrations, scroll horizontally if needed"><div id="fig-num"></div></div><figcaption>Success as the number of successful demonstrations changes, with a fixed mixture.</figcaption></figure></div>
+            <p class="chart-caption">Mean ± standard error over five training seeds. The shortest route replaces part of a demonstration with at most one accepted bridge.</p>
+          </div>
+          <div class="review-change">
+          <div class="question" id="near-optimal">
+            <h3>What if the demonstrations are already good?</h3>
+            <p>
+              On three <a href="https://arxiv.org/abs/2410.24185">DexMimicGen</a>
+              tasks, where the demonstrations are
+              near-optimal, NEEDLE matches DP on Threading and improves by 1.3
+              and 4.0 percentage points on Coffee and Three Piece Assembly. AWR
+              performs best on Threading.
+            </p>
+          </div>
+          <div class="table-scroll">
+            <table class="results-table">
+              <caption>
+                DexMimicGen Success (%) · Mean ± Standard Error Across Three Training Seeds
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Task</th>
+                  <th scope="col">DP</th>
+                  <th scope="col">SBR</th>
+                  <th scope="col">AWR</th>
+                  <th scope="col">IDQL</th>
+                  <th scope="col">SARM</th>
+                  <th scope="col" class="ours-col">NEEDLE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Coffee</th>
+                  <td>62.0 ± 1.2</td>
+                  <td>60.7 ± 2.4</td>
+                  <td>52.7 ± 1.8</td>
+                  <td>49.3 ± 1.8</td>
+                  <td>39.3 ± 1.8</td>
+                  <td class="ours-col"><b>63.3 ± 0.7</b></td>
+                </tr>
+                <tr>
+                  <th scope="row">Three Piece Assembly</th>
+                  <td>51.3 ± 0.7</td>
+                  <td>44.7 ± 1.8</td>
+                  <td>47.3 ± 1.3</td>
+                  <td>43.3 ± 3.5</td>
+                  <td>26.7 ± 1.8</td>
+                  <td class="ours-col"><b>55.3 ± 1.8</b></td>
+                </tr>
+                <tr>
+                  <th scope="row">Threading</th>
+                  <td>46.0 ± 1.2</td>
+                  <td>40.7 ± 2.4</td>
+                  <td><b>50.0 ± 1.2</b></td>
+                  <td>40.0 ± 1.2</td>
+                  <td>34.0 ± 2.0</td>
+                  <td class="ours-col">46.0 ± 1.2</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="chart-caption">
+            NEEDLE is most valuable when a dataset contains complementary,
+            inefficient, or unsuccessful behavior that can be recombined into
+            better supervision. When the demonstrations are already close to the
+            desired behavior, rewriting has correspondingly less to add, and it
+            does not reduce success relative to standard behavior cloning (DP).
+          </p>
+          </div>
+          <div class="review-change" id="bridge-errors">
+            <div class="question"><h3>Which bridge errors hurt, and does the verifier remove them?</h3><p class="insight review-insight" id="key-insight-3"><strong><span aria-hidden="true">💡</span> Key Insight 3.</strong> Bridges need not perfectly connect to the target trajectory for policy learning. The verifier filters harmful errors while retaining useful shortcuts; without filtering, the same number of bridges produces policies near or below standard behavior cloning.</p><p><strong>We find two types of errors present in bridges: grasp errors and pose errors. Through analysis, we find that grasp errors hurt the policy more than pose errors. In comparison to a value function, our verifier admits much fewer both error types.</strong> Pose errors land more than 5 cm from the target; grasp errors drop the object.</p></div>
+            <div class="review-pair error-comparison">
+              <figure><p class="row-title">Success after replacing bridges</p><div class="plot" tabindex="0" role="region" aria-label="Success after replacing bridges, scroll horizontally if needed"><div id="fig-s2-swap"></div></div></figure>
+              <div class="error-filter-group">
+                <div class="error-filter-pair">
+                  <figure><p class="row-title">Grasp errors among candidates</p><div class="plot" tabindex="0" role="region" aria-label="Grasp errors among candidates, scroll horizontally if needed"><div id="fig-s2-grasp"></div></div></figure>
+                  <figure><p class="row-title">Gripper landing error</p><div class="plot" tabindex="0" role="region" aria-label="Gripper landing error, scroll horizontally if needed"><div id="fig-s2-pose"></div></div></figure>
+                </div>
+                <div id="filter-comparison-legend"></div>
+              </div>
+            </div>
+            <p class="chart-caption"><strong>Left:</strong> At equal proportion replacement, grasp errors hurt the policy more than pose error. <strong>Right:</strong> We see our verifier admitting far fewer grasp and pose error bridges into the final training dataset compared to a value function.</p>
+            <p class="chart-caption">Click value-function or rejected bars to see examples.</p><div class="fail-viewer" id="s2-viewer-filter" hidden><h4></h4><div class="s2-vids"></div></div>
+            <figure><p class="row-title">Errors in training bridges</p><div class="plot" tabindex="0" role="region" aria-label="Errors in training bridges, scroll horizontally if needed"><div id="fig-s2-comp"></div></div><figcaption>We dig further into the bridge composition of our final accepted batch. Click on each percentage bar to see example rollouts of bridges in each set.</figcaption></figure>
+            <div class="fail-viewer" id="s2-viewer-comp" hidden><h4></h4><div class="s2-vids"></div></div>
+          </div>
           <div class="question" id="completion-analysis">
             <h3>Do bridges lead to faster completion?</h3>
             <p>
@@ -563,6 +699,7 @@
               completion, and whether the trained policy succeeds within a given
               step budget.
             </p>
+            <p class="insight review-insight" id="key-insight-4"><strong><span aria-hidden="true">💡</span> Key Insight 4.</strong> Verified bridges connect recorded states to shorter routes to success. Bridges from failed demonstrations add supervision beyond successful demonstrations and improve recovery.</p>
           </div>
           <figure class="paper-figure">
             <div
@@ -633,6 +770,7 @@
             </figcaption>
           </figure>
 
+          <div class="group-divider review-change" id="stitching-breakdown"><h3>Stitching breakdown</h3><p>How are bridges verified, and what behavior do they contain?</p></div>
           <div class="question" id="verifier-analysis">
             <h3>Does checking the bridges matter?</h3>
             <p>
@@ -691,70 +829,11 @@
             itself never sees object positions.
           </p>
 
-          <div class="question">
-            <h3>What if the demonstrations are already good?</h3>
-            <p>
-              On three <a href="https://arxiv.org/abs/2410.24185">DexMimicGen</a>
-              tasks, where the demonstrations are
-              near-optimal, NEEDLE matches DP on Threading and improves by 1.3
-              and 4.0 percentage points on Coffee and Three Piece Assembly. AWR
-              performs best on Threading.
-            </p>
+          <div class="review-change" id="bridge-composition">
+            <div class="question"><h3>What behavior do training bridges contain?</h3><p><strong>Stitches add a small but important share of training data, with different compositions across tasks.</strong> Bridges appear in 19.6%, 8.3%, and 6.5% of training windows on Can, Square, and Transport, respectively.</p></div>
+            <figure><p class="row-title">Contact during training bridges</p><div class="plot" tabindex="0" role="region" aria-label="Contact during training bridges, scroll horizontally if needed"><div id="fig-contact"></div></div><figcaption>Bridges cover free-space motion and contact. Click a segment to see an example.</figcaption></figure>
+            <div class="fail-viewer" id="ex-viewer"><p class="fv-hint">Select a bar segment to view a bridge.</p><h4></h4><p class="fv-count"></p><div class="ex-videos" hidden><div class="tabs" role="tablist" aria-label="Example video"><button type="button" role="tab" aria-selected="true">Bridge rollout</button><button type="button" role="tab" aria-selected="false">Comparison with original</button></div><video muted loop playsinline controls preload="none"></video><video muted loop playsinline controls preload="none" hidden></video></div></div>
           </div>
-          <div class="table-scroll">
-            <table class="results-table">
-              <caption>
-                DexMimicGen Success (%) · Mean ± Standard Error Across Three Training Seeds
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Task</th>
-                  <th scope="col">DP</th>
-                  <th scope="col">SBR</th>
-                  <th scope="col">AWR</th>
-                  <th scope="col">IDQL</th>
-                  <th scope="col">SARM</th>
-                  <th scope="col" class="ours-col">NEEDLE</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">Coffee</th>
-                  <td>62.0 ± 1.2</td>
-                  <td>60.7 ± 2.4</td>
-                  <td>52.7 ± 1.8</td>
-                  <td>49.3 ± 1.8</td>
-                  <td>39.3 ± 1.8</td>
-                  <td class="ours-col"><b>63.3 ± 0.7</b></td>
-                </tr>
-                <tr>
-                  <th scope="row">Three Piece Assembly</th>
-                  <td>51.3 ± 0.7</td>
-                  <td>44.7 ± 1.8</td>
-                  <td>47.3 ± 1.3</td>
-                  <td>43.3 ± 3.5</td>
-                  <td>26.7 ± 1.8</td>
-                  <td class="ours-col"><b>55.3 ± 1.8</b></td>
-                </tr>
-                <tr>
-                  <th scope="row">Threading</th>
-                  <td>46.0 ± 1.2</td>
-                  <td>40.7 ± 2.4</td>
-                  <td><b>50.0 ± 1.2</b></td>
-                  <td>40.0 ± 1.2</td>
-                  <td>34.0 ± 2.0</td>
-                  <td class="ours-col">46.0 ± 1.2</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="chart-caption">
-            NEEDLE is most valuable when a dataset contains complementary,
-            inefficient, or unsuccessful behavior that can be recombined into
-            better supervision. When the demonstrations are already close to the
-            desired behavior, rewriting has correspondingly less to add, and it
-            does not reduce success relative to standard behavior cloning (DP).
-          </p>
         </div>
       </section>
 
@@ -774,7 +853,7 @@
           <div class="question" id="abl-stage">
             <h3>Which kinds of connection help?</h3>
             <p>
-              NEEDLE uses three kinds of bridge: skipping ahead within a
+              <strong class="review-text">Each type of stitch contributes to the full method.</strong> NEEDLE uses three kinds of bridge: skipping ahead within a
               demonstration (S1), connecting two demonstrations (S2), and
               connecting a failed attempt to a successful demonstration (S3).
               Each row trains NEEDLE with a subset of them; the full method is
@@ -994,6 +1073,8 @@
       </section>
     </main>
     <script src="charts.js?v=4"></script>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=review-nav-3"></script>
+    <script src="review-charts.js?v=6"></script>
+    <script src="retrieval-animation.js?v=1"></script>
   </body>
 </html>
